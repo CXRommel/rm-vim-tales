@@ -7,7 +7,7 @@ const MOVE_SPELLS: SpellId[] = ['hjkl', 'words', 'edges', 'counts', 'find'];
 const ROUNDS = 5, BOSS_ROUNDS = 8;
 // recap guardians (and Dr. Clicker's phases, in this order) draw each round from one group of earlier spells
 const RECAP: Record<string, SpellId[]> = {
-  recap1: ['hjkl', 'words', 'edges', 'counts', 'find'],
+  recap1: ['hjkl', 'words', 'edges', 'counts', 'find', 'search'],
   recap2: ['x', 'insert', 'lines', 'delete', 'motions', 'change'],
   recap3: ['inside', 'around', 'replace', 'yank', 'dot'],
 };
@@ -321,7 +321,7 @@ function solveSteps(start: string, steps: Step[]) {
 }
 
 // movement rounds: letters go missing where the spell shines; par comes from a cheapest-path search
-function moveset(learned: Learned, v: Vim, targets: string) {
+function moveset(learned: Learned, v: Vim, targets: string, frags: string[] = []) {
   const m: string[] = [];
   const has = (s: SpellId) => learned.has(s);
   if (has('hjkl')) m.push('h', 'j', 'k', 'l');
@@ -333,6 +333,7 @@ function moveset(learned: Learned, v: Vim, targets: string) {
     for (let n = 2; n < v.lines.length; n++) m.push(n + 'G');
   }
   if (has('find')) for (const ch of new Set(targets)) m.push('f' + ch, 'F' + ch, 't' + ch, 'T' + ch);
+  if (has('search')) for (const f of new Set(frags.flatMap(f => [f, f[0]]))) m.push(`/${f}<CR>`);
   return m;
 }
 // Dijkstra over cursor states (cost = keystrokes) → Map "r,c" → cheapest key string
@@ -358,7 +359,7 @@ function paths(v: Vim, moves: string[]) {
   return out;
 }
 function genFix(R: Rand, d: number, id: SpellId, learned: Learned): Level {
-  const n = id === 'counts' ? 8 + 2 * d : id === 'hjkl' ? 3 + Math.floor(d / 2) : 4 + Math.floor(d / 2);
+  const n = id === 'search' ? 14 + 2 * d : id === 'counts' ? 8 + 2 * d : id === 'hjkl' ? 3 + Math.floor(d / 2) : 4 + Math.floor(d / 2);
   let rows = Array.from({ length: n }, () => pick(R, TEXT));
   if (id === 'hjkl') rows = rows.map(l => l.slice(0, 10 + 2 * d).trimEnd());
   if (id === 'edges' || id === 'counts') rows = rows.map(l => ' '.repeat(Math.floor(R() * 4)) + l);
@@ -369,7 +370,8 @@ function genFix(R: Rand, d: number, id: SpellId, learned: Learned): Level {
     ws.forEach((m, i) => {
       const s = m.index, e = s + m[0].length - 1, add = (c: number) => cand.push([r, c, i]);
       if (e === s) return;
-      if (id === 'hjkl' || id === 'find') for (let c = s; c < e; c++) add(c);
+      if (id === 'search') { if (i && i < ws.length - 1) for (let c = s + 1; c < e - 1; c++) add(c); } // deep in a mid-line word, off every w/e/0/$ landing
+      else if (id === 'hjkl' || id === 'find') for (let c = s; c < e; c++) add(c);
       else if (id === 'words') add(pick(R, [s, e - 1]));
       else if (id === 'edges' && (i === 0 || i === ws.length - 1)) add(i ? e - 1 : s);
       else if (id === 'counts' && i === 0) add(s);
@@ -380,7 +382,9 @@ function genFix(R: Rand, d: number, id: SpellId, learned: Learned): Level {
     .slice(0, 2 + d).map(([r, c]) => ({ r, c, ch: rows[r][c] }));
   const start = rows.map((l, r) => [...l].filter((_, c) => !fixes.some(f => f.r === r && f.c === c)).join(''));
   const lv = { start: start.join('\n'), goal: rows.join('\n') }, run = new Run(lv);
-  const moves = moveset(learned, run.vim, fixes.map(f => rows[f.r][f.c + 1]).join(''));
+  // search jumps straight to the 2 letters after a gap (as they read with the gaps open)
+  const frags = fixes.map(f => start[f.r].slice(f.c - fixes.filter(g => g.r === f.r && g.c < f.c).length).slice(0, 2));
+  const moves = moveset(learned, run.vim, fixes.map(f => rows[f.r][f.c + 1]).join(''), frags);
   let solution = '', left = fixes;
   while (left.length) {
     const ps = paths(run.vim, moves);
@@ -401,6 +405,9 @@ function makeRound(id: SpellId, R: Rand, d: number, learned: Learned): Level {
   // Dr. Clicker: two rounds per phase, the last phase until the end
   if (id === 'boss') return makeRound(pick(R, PHASES[Math.min(PHASES.length - 1, (d - 1) >> 1)]), R, d + 1, learned);
   if (MOVE_SPELLS.includes(id)) return genFix(R, d, id, learned);
+  // search is a movement spell too, but battle-only (on the map it would leap straight to every chest).
+  // Its par counts only hjkl and /: counted j's land almost anywhere a key cheaper, and every key over par hurts
+  if (id === 'search') return genFix(R, d, id, new Set(['hjkl', 'search']));
   const { start, goal, steps } = GEN[id](R, d);
   const { sol, text } = solveSteps(start.join('\n'), steps);
   // downloaded text can trip a generator (yw stops at punctuation): fall back to the built-in text
