@@ -266,6 +266,7 @@ const BOSS: Record<string, [string, string, [number, number, string][]]> = {
   swarmBoss: ['pointer', '7:8 0:2', [[0, 8, 'a.a.a'], [1, 8, 'aaaaa'], [9, 12, '8'], [10, 13, '8']]],
   smearBoss: ['ghost', '7:b d:3 0:0', [[14, 3, 'b'], [15, 3, 'b'], [14, 9, 'b'], [15, 9, 'b'], [2, 6, '.7']]],
   cloneBoss: ['clicker', '6:5 7:6 e:c c:8', [[1, 6, '....'], [12, 6, '7..7']]],
+  gnatBoss: ['mosquito', 'c:9 7:a 8:b', [[0, 5, '9..9'], [11, 7, 'bb']]],
   owlBoss: ['owl', '4:d f:7 7:a', [[0, 3, '0000000000'], [1, 6, '0000'], [1, 12, 'a'], [2, 12, 'a']]],
 };
 

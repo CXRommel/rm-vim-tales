@@ -1,5 +1,5 @@
 // vim-tales engine: a small vim subset + the levels. Shared by the UI and the tests.
-export type SpellId = 'hjkl' | 'words' | 'edges' | 'counts' | 'find' | 'x' | 'insert' | 'lines' | 'delete' | 'motions'
+export type SpellId = 'hjkl' | 'words' | 'edges' | 'counts' | 'find' | 'search' | 'x' | 'insert' | 'lines' | 'delete' | 'motions'
   | 'change' | 'inside' | 'around' | 'replace' | 'yank' | 'dot' | 'recap1' | 'recap2' | 'recap3' | 'boss';
 export type Mode = 'normal' | 'insert';
 export interface Pos { r: number; c: number }
@@ -14,6 +14,10 @@ export interface Lesson extends Level { id: SpellId; world: string; title: strin
 
 const charClass: WordClass = ch => (ch === undefined || /\s/.test(ch) ? 0 : /\w/.test(ch) ? 1 : 2);
 const tokens = (s: string): string[] => s.match(/<\w+>|./g) || [];
+// Enter inside a pending /search becomes this one char, so the pattern and its end live in `pending` (and dot-repeat)
+const CR = '\u23ce';
+const SEARCHING = /^\d*(?:[dcy]\d*)?[/?]/;
+const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 class Vim {
   lines: string[];
@@ -22,6 +26,8 @@ class Vim {
   undo: { lines: string[]; r: number; c: number }[] = [];
   reg = { text: '', linewise: false };
   lastFind: { cmd: FindCmd; ch: string } | null = null;
+  // ponytail: / and ? search literal text, not regex; real patterns if a lesson ever needs them
+  lastSearch: { re: string; back: boolean } | null = null;
   lastChange: string[] = [];
   rec: string[] | null = null;
   hasCount = false;
@@ -45,6 +51,10 @@ class Vim {
     this.msg = '';
     if (this.mode === 'insert') return this.insertKey(k);
     if (k === '<Esc>') { this.pending = ''; return; }
+    if (SEARCHING.test(this.pending)) { // typing a /pattern: Enter runs it, Backspace erases (past the / cancels)
+      if (k === '<BS>') { this.pending = this.pending.slice(0, -1); if (!SEARCHING.test(this.pending)) this.pending = ''; return; }
+      if (k === '<CR>') k = CR;
+    }
     if (k.length > 1) return;
     const p = (this.pending += k);
     const res = this.exec(p);
@@ -122,6 +132,16 @@ class Vim {
           }
         return 'fail';
       }
+      case 'n': case 'N': return this.search(n, k === 'N', { r, c });
+      case '*': case '#': { // the whole word under the cursor, searched from its start so this word isn't the match
+        const l = L[r];
+        if (this.cls(l[c]) !== 1) return 'fail';
+        let s = c, e = c;
+        while (s > 0 && this.cls(l[s - 1]) === 1) s--;
+        while (e < l.length && this.cls(l[e]) === 1) e++;
+        this.lastSearch = { re: `\\b${escRe(l.slice(s, e))}\\b`, back: k === '#' };
+        return this.search(n, false, { r, c: s });
+      }
       case ';': case ',': {
         if (!this.lastFind) return 'fail';
         const { cmd, ch } = this.lastFind;
@@ -130,6 +150,13 @@ class Vim {
       }
     }
     if (k === 'g') return 'wait';
+    if ('/?'.includes(k[0])) {
+      if (!k.endsWith(CR)) return 'wait';
+      const pat = k.slice(1, -1);
+      if (pat) this.lastSearch = { re: escRe(pat), back: k[0] === '?' };
+      else if (this.lastSearch) this.lastSearch.back = k[0] === '?'; // a bare / or ? reuses the last pattern
+      return this.search(n, false, { r, c });
+    }
     if ('fFtT'.includes(k[0])) return k.length === 1 ? 'wait' : this.find(k[0] as FindCmd, k[1], n, false);
     if (op && 'ia'.includes(k[0])) return k.length === 1 ? 'wait' : this.textObj(k) || 'bad';
     return 'bad';
@@ -190,6 +217,26 @@ class Vim {
       c = cmd === 't' ? pos - 1 : cmd === 'T' ? pos + 1 : pos;
     }
     return { r: this.r, c, inclusive: cmd === 'f' || cmd === 't' };
+  }
+
+  // the n-th match of the last search from `from`, wrapping around the buffer like vim's wrapscan
+  search(n: number, flip: boolean, from: Pos): Target | 'fail' {
+    const s = this.lastSearch, L = this.lines, N = L.length;
+    if (!s) { this.msg = 'no previous search'; return 'fail'; }
+    const back = s.back !== flip;
+    let { r, c } = from;
+    for (let i = 0; i < n; i++) {
+      let hit: Pos | null = null;
+      for (let j = 0; j <= N && !hit; j++) {
+        const rr = (((back ? r - j : r + j) % N) + N) % N;
+        const cs = [...L[rr].matchAll(new RegExp(s.re, 'g'))].map(m => m.index)
+          .filter(x => (j === 0 ? (back ? x < c : x > c) : j === N ? (back ? x >= c : x <= c) : true));
+        if (cs.length) hit = { r: rr, c: back ? cs[cs.length - 1] : cs[0] };
+      }
+      if (!hit) { this.msg = 'pattern not found'; return 'fail'; }
+      ({ r, c } = hit);
+    }
+    return { r, c };
   }
 
   // ponytail: text objects only look at the current line
@@ -366,7 +413,8 @@ class Run {
 const HEAD: Record<string, SpellId> = { h: 'hjkl', j: 'hjkl', k: 'hjkl', l: 'hjkl', w: 'words', b: 'words', e: 'words', 0: 'edges', '^': 'edges', $: 'edges',
   G: 'counts', g: 'counts', f: 'find', F: 'find', t: 'find', T: 'find', ';': 'find', ',': 'find', x: 'x', X: 'x', i: 'hjkl', a: 'hjkl',
   I: 'lines', A: 'lines', o: 'lines', O: 'lines', J: 'lines', D: 'motions', C: 'change', s: 'change', S: 'change',
-  r: 'replace', '~': 'replace', p: 'yank', P: 'yank', u: 'hjkl', '.': 'dot', '%': 'around' };
+  r: 'replace', '~': 'replace', p: 'yank', P: 'yank', u: 'hjkl', '.': 'dot', '%': 'around',
+  '/': 'search', '?': 'search', n: 'search', N: 'search', '*': 'search', '#': 'search' };
 const OPS: Record<string, SpellId> = { d: 'delete', c: 'change', y: 'yank' };
 function needs(cmd: string): SpellId[] {
   const [, n1, op, n2, h] = cmd.match(/^([1-9]\d*)?([dcy])?([1-9]\d*)?(.?)/)!;
@@ -422,6 +470,14 @@ const LEVELS: Lesson[] = [
     start: 'find the x, then the fx, then the bx',
     goal: 'find the ox, then the fox, then the box',
     par: 15, solution: 'fxio<Esc>;;io<Esc>;;io<Esc>',
+  },
+  {
+    id: 'search', world: M, title: 'Needle in a haystack',
+    learn: '/ searches forward: type /cv then Enter and the cursor lands on the next "cv", even many lines down. ? searches backwards. n jumps to the next match, N to the one before. * searches for the word under the cursor, # does it backwards. The gaps here sit far apart: search for the letters around each one, then a to fill it.',
+    keys: [['/{text}', 'search forward'], ['?{text}', 'search backward'], ['n', 'next match'], ['N', 'previous match'], ['*', 'word under cursor'], ['#', 'word, backwards']],
+    start: 'search the long scroll for the lost letters\nthe road goes on\nand on\nand on\nthe dragon sleeps in a dark cve\nand on\nand on\nand on\nthe old cve holds the gm',
+    goal: 'search the long scroll for the lost letters\nthe road goes on\nand on\nand on\nthe dragon sleeps in a dark cave\nand on\nand on\nand on\nthe old cave holds the gem',
+    par: 18, solution: '/cv<CR>aa<Esc>naa<Esc>/gm<CR>ae<Esc>',
   },
   {
     id: 'x', world: W, title: 'x marks the typo',
@@ -514,7 +570,7 @@ const LEVELS: Lesson[] = [
   // recap guardians: every round is a random spell from their group (see RECAP in game.ts)
   {
     id: 'recap1', world: B, title: 'Recap: Click Storm',
-    learn: 'Every movement spell of Chapters I and II at once. Each gap wants a different leap: words, edges, counts or a find.',
+    learn: 'Every movement spell of Chapters I and II at once. Each gap wants a different leap: words, edges, counts, f or /.',
     keys: [['w', 'next word'], ['$', 'line end'], ['^', 'first non-blank'], ['fx', 'find x']],
     start: 'jump to th end\n    nd the start\nfind the bx',
     goal: 'jump to the end\n    and the start\nfind the box',

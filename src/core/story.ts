@@ -82,7 +82,9 @@ const MAPS: string[][] = [
     '#~~~~~~~o~~~~~~~~~~~~~~~~~~~~~~~~~~#~~~~~~~~o~~~~~~~~~~~~~~~~~~~~~~~~~~#',
     '#~~~~~~~o~~~~~~~~~~~~~~~~~~~~~~~~~~#~~~$~~~~o~~~~~~~~~~~~~~~~~~~~~~~~~~#',
     '#       #                          #########B###########################',
-    '#  $                        >                 $             $          #',
+    '#  $                                          $     c       $          #',
+    '############################C###########################################',
+    '#                           >                               $          #',
     '########################################################################',
   ],
   [
@@ -324,7 +326,7 @@ const CHAPTERS: Chapter[] = [
       ['hero', '', ['The boars move each time I act... if I cover many steps in ONE command, they\'ll never catch me.', 'Los jabalíes se mueven cada vez que actúo... si recorro muchos pasos en UN comando, nunca me atraparán.']],
     ],
     map: MAPS[1],
-    levels: ['counts', 'find'],
+    levels: ['counts', 'find', 'search'],
     sages: [
       { spr: 'nine', name: ['Farmer Nine', 'Granjero Nueve'], say: [
         ['Took you long enough. Out here we count everything, even our steps.', 'Cuánto tardaste. Aquí contamos todo, hasta nuestros pasos.'],
@@ -334,6 +336,11 @@ const CHAPTERS: Chapter[] = [
       { spr: 'seeker', name: ['Seeker Fen', 'Buscadora Fen'], say: [
         ['You can\'t see me unless you know what to look for. The lake is the same.', 'No puedes verme si no sabes qué buscar. El lago es igual.'],
         ['Those islands ( o ) are too far to walk or leap as words. But you can FIND them.', 'Esas islas ( o ) están demasiado lejos para caminar o saltar como palabras. Pero puedes ENCONTRARLAS.'],
+      ] },
+      { spr: 'scribe', name: ['Librarian Slash', 'Bibliotecaria Barra'], say: [
+        ['f only looks along one line. My scrolls are hundreds of lines long, and I never read them top to bottom.', 'f solo mira a lo largo de una línea. Mis pergaminos tienen cientos de líneas, y nunca los leo de arriba abajo.'],
+        ['Type / and the words you want, then Enter. The cursor flies to them, however far down they are. n finds the next one.', 'Escribe / y las palabras que buscas, luego Enter. El cursor vuela hasta ellas, por lejos que estén. n encuentra la siguiente.'],
+        ['The Haystack Gnat hid letters all over its scrolls. Search, don\'t walk!', 'El Mosquito del Pajar escondió letras por todos sus pergaminos. ¡Busca, no camines!'],
       ] },
     ],
     npcs: [
@@ -687,6 +694,7 @@ const MONSTERS: Record<SpellId, Monster> = {
   edges: { spr: 'snailBoss', name: ['Margin Snail', 'Caracol Margen'], taunt: ['Slooow... I hide my treasures at the ends of lines...', 'Leeento... escondo mis tesoros al final de las líneas...'] },
   counts: { spr: 'boarBoss', name: ['Tally Boar', 'Jabalí Contador'], taunt: ['GRUNT. One step, two steps, ten steps. You\'ll be exhausted before you reach me!', 'GRUÑ. Un paso, dos pasos, diez pasos. ¡Estarás agotado antes de alcanzarme!'] },
   find: { spr: 'serpentBoss', name: ['Seeker Serpent', 'Serpiente Buscadora'], taunt: ['Sssss... find the missing letterssss if you can...', 'Sssss... encuentra las letras perdidassss si puedessss...'] },
+  search: { spr: 'gnatBoss', name: ['Haystack Gnat', 'Mosquito del Pajar'], taunt: ['Bzzzz! I hid your letters like needles in a haystack. Hundreds of lines! Walk them all, little cursor!', '¡Bzzzz! Escondí tus letras como agujas en un pajar. ¡Cientos de líneas! ¡Camínalas todas, cursorcito!'] },
   x: { spr: 'toadBoss', name: ['Typo Toad', 'Sapo Errata'], taunt: ['Ribbbit! I put extra letters everywheree!', '¡Croooac! ¡Pongo letras de más por todass partes!'] },
   insert: { spr: 'goblinBoss', name: ['Gap Goblin', 'Duende Hueco'], taunt: ['Hehehe! I stole letters from your sentences!', '¡Jejeje! ¡Robé letras de tus frases!'] },
   lines: { spr: 'lizardBoss', name: ['Line Lizard', 'Lagarto Lineal'], taunt: ['Semicolons? Comments? I ate them all!', '¿Puntos y coma? ¿Comentarios? ¡Me los comí todos!'] },

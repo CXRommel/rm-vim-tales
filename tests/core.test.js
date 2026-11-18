@@ -26,6 +26,20 @@ assert.equal(t('l1\nl2\nl3', 'jdG'), 'l1');
 assert.equal(t('a (b [c] d) e', 'f(%x'), 'a (b [c] d e', '% jumps to the matching bracket');
 assert.equal(t('f(\nx)', '%x'), 'f(\nx', '% matches across lines');
 assert.equal(t('go(a)(b) x', 'f)lda('), 'go(a) x');
+const at = (start, keys) => { const v = new Vim(start); tokens(keys).forEach(k => v.key(k)); return [v.r, v.c]; };
+assert.deepEqual(at('ab\ncd ab\nab', '/ab<CR>'), [1, 3], '/ finds the next match across lines');
+assert.deepEqual(at('ab\ncd ab\nab', '/ab<CR>nn'), [0, 0], 'n wraps around to the top');
+assert.deepEqual(at('ab\ncd ab\nab', '/ab<CR>NN'), [2, 0], 'N goes the other way, wrapping');
+assert.deepEqual(at('ab\ncd ab\nab', '?ab<CR>'), [2, 0], '? searches backwards, wrapping');
+assert.deepEqual(at('a.b axb a.b', '/a.b<CR>'), [0, 8], 'the pattern is literal text');
+assert.deepEqual(at('foo food foo', '*'), [0, 9], '* matches the whole word only');
+assert.deepEqual(at('foo - foo', 'w#'), [0, 4], '# from off a word does nothing');
+assert.deepEqual(at('foo x foo', '$#'), [0, 0], '# goes back to the previous whole word');
+assert.deepEqual(at('abc', '/zz<CR>'), [0, 0], 'no match: stay put');
+assert.deepEqual(at('abc abd', '/abx<BS>d<CR>'), [0, 4], 'Backspace edits the pattern');
+assert.equal(t('keep cut here', 'd/here<CR>'), 'here', 'd/ deletes up to the match');
+assert.equal(t('a1 b a2 b a3', 'fbd/a<CR>w.'), 'a1 a2 a3', 'dot repeats a d/ search');
+assert.deepEqual(needs('3/'), ['counts', 'search']);
 console.log(`ok: ${LEVELS.length} levels`);
 
 // gating: every handcrafted solution uses only spells learned so far
